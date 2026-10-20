@@ -10,8 +10,8 @@ android {
         applicationId "com.cutiecam.app"
         minSdk 29          // Android 10 and newer
         targetSdk 35
-        versionCode 2
-        versionName "1.1"
+        versionCode 3
+        versionName "1.2"
     }
 
     // One fixed key for every build, so new versions install over old ones.

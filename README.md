@@ -24,7 +24,10 @@ Needs Android 10 or newer. For MP4 recording, keep **Android System WebView** up
 ## Using it
 
 - **Start camera**, allow Camera and Microphone.
-- **Toon face** (default): her real face is painted over as a cartoon that follows her exact face shape:
+- **AI cartoon** (default): an AI model (AnimeGANv2 "face paint", runs on the phone) redraws her face
+  as a cartoon of herself. **HD on**: after recording, the clip is redrawn in high quality
+  (takes a few minutes; the plain clip only lives in memory and is deleted). **HD off**: saved right away.
+- **Toon face**: her real face is painted over as a cartoon that follows her exact face shape:
   big anime eyes on her eyes, a mouth drawn from her lips, brows on her brows, skin matched to her tone.
   The whole picture gets a cartoon filter so everything blends.
 - **Girl mask**: the chibi girl head placed over the face instead.
@@ -40,6 +43,9 @@ Needs Android 10 or newer. For MP4 recording, keep **Android System WebView** up
 
 | File | What it does |
 | --- | --- |
+| `app/src/main/assets/www/facepaint.js` | AI face-paint model in TensorFlow.js |
+| `app/src/main/assets/www/aicartoon.js` | Head crop, AI cartoon, blending back into the frame |
+| `app/src/main/assets/www/hd.js` | HD conversion after recording (WebCodecs + mp4box + mp4-muxer) |
 | `app/src/main/assets/www/toonface.js` | Toon face painted onto the face mesh |
 | `app/src/main/assets/www/toon.js` | Cartoon (cel-shading) filter for the camera picture, WebGL |
 | `app/src/main/assets/www/girl.js` | Draws the chibi girl (colours are in `LOOK` at the top) |
@@ -50,3 +56,9 @@ Needs Android 10 or newer. For MP4 recording, keep **Android System WebView** up
 
 Tip: to try changes quickly on a computer, run `python -m http.server` inside `app/src/main/assets/www`
 (after one Android build, so the `mediapipe` folder exists) and open `http://localhost:8000` in Chrome.
+
+## Credits
+
+- AI cartoon model: AnimeGANv2 face paint v2 from [bryandlee/animegan2-pytorch](https://github.com/bryandlee/animegan2-pytorch)
+  (personal use). Regenerate with the "Prepare AI model" workflow.
+- TensorFlow.js (Apache-2.0), mp4box.js (BSD-3), mp4-muxer (MIT), MediaPipe (Apache-2.0).
