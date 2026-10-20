@@ -1,0 +1,10 @@
+.gradle/
+.idea/
+build/
+app/build/
+local.properties
+*.iml
+captures/
+.cxx/
+# downloaded automatically at build time
+app/src/main/assets/www/mediapipe/

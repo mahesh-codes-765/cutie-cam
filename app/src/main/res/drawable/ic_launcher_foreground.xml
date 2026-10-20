@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- back hair -->
+    <path android:fillColor="#3B2423"
+        android:pathData="M54,27 C38,27 30,39 30,53 L30,82 L78,82 L78,53 C78,39 70,27 54,27 Z" />
+    <!-- face -->
+    <path android:fillColor="#F7D2B2"
+        android:pathData="M36,56 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0 Z" />
+    <!-- bangs -->
+    <path android:fillColor="#3B2423"
+        android:pathData="M34,53 C34,39 42,33 54,33 C66,33 74,39 74,53 C71,47 67,45 63,47 C61,43 57,42 54,45 C51,42 47,43 45,47 C41,45 37,47 34,53 Z" />
+    <!-- eyes -->
+    <path android:fillColor="#2C1418"
+        android:pathData="M44.4,58 a2.8,3.8 0 1,0 5.6,0 a2.8,3.8 0 1,0 -5.6,0 Z M58,58 a2.8,3.8 0 1,0 5.6,0 a2.8,3.8 0 1,0 -5.6,0 Z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M45.4,56.6 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z M59,56.6 a1.1,1.1 0 1,0 2.2,0 a1.1,1.1 0 1,0 -2.2,0 Z" />
+    <!-- blush -->
+    <path android:fillColor="#FF8FA8"
+        android:pathData="M40.4,64 a2.6,1.4 0 1,0 5.2,0 a2.6,1.4 0 1,0 -5.2,0 Z M62.4,64 a2.6,1.4 0 1,0 5.2,0 a2.6,1.4 0 1,0 -5.2,0 Z" />
+    <!-- smile -->
+    <path android:strokeColor="#3A2026" android:strokeWidth="1.4" android:strokeLineCap="round"
+        android:pathData="M51,66 Q54,69 57,66" />
+    <!-- bow -->
+    <path android:fillColor="#FF6F96"
+        android:pathData="M64,34 L71.5,29.5 L71.5,38.5 Z M64,34 L56.5,29.5 L56.5,38.5 Z" />
+    <path android:fillColor="#D9466F"
+        android:pathData="M62,34 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z" />
+</vector>

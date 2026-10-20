@@ -1,0 +1,68 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.cutiecam.app'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.cutiecam.app"
+        minSdk 29          // Android 10 and newer
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // signed with the debug key so the APK installs directly on her phone
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+// ---------------------------------------------------------------------------
+// Face tracker files (Google MediaPipe). Downloaded once on the first build and
+// packed inside the APK, so the app works fully offline on the phone.
+// ---------------------------------------------------------------------------
+def mpVersion = '0.10.14'
+def mpDir = file('src/main/assets/www/mediapipe')
+def mpFiles = [
+    'vision_bundle.js'                     : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mpVersion}/vision_bundle.mjs",
+    'wasm/vision_wasm_internal.js'         : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mpVersion}/wasm/vision_wasm_internal.js",
+    'wasm/vision_wasm_internal.wasm'       : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mpVersion}/wasm/vision_wasm_internal.wasm",
+    'wasm/vision_wasm_nosimd_internal.js'  : "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mpVersion}/wasm/vision_wasm_nosimd_internal.js",
+    'wasm/vision_wasm_nosimd_internal.wasm': "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${mpVersion}/wasm/vision_wasm_nosimd_internal.wasm",
+    'face_landmarker.task'                 : 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+]
+
+tasks.register('downloadFaceTracker') {
+    description = 'Downloads the MediaPipe face tracker into the app assets.'
+    outputs.dir(mpDir)
+    doLast {
+        mpFiles.each { name, url ->
+            def f = new File(mpDir, name)
+            if (!f.exists() || f.length() < 1000) {
+                f.parentFile.mkdirs()
+                println "Downloading ${name} ..."
+                def conn = new URL(url).openConnection()
+                conn.setConnectTimeout(30000)
+                conn.setReadTimeout(120000)
+                conn.inputStream.withStream { input -> f.withOutputStream { out -> out << input } }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name == 'preBuild' }.configureEach { dependsOn 'downloadFaceTracker' }
