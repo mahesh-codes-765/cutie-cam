@@ -24,7 +24,11 @@ Needs Android 10 or newer. For MP4 recording, keep **Android System WebView** up
 ## Using it
 
 - **Start camera**, allow Camera and Microphone.
-- **Show my room**: real background, face covered by the girl. If the face is lost, the whole picture blurs.
+- **Toon face** (default): her real face is painted over as a cartoon that follows her exact face shape:
+  big anime eyes on her eyes, a mouth drawn from her lips, brows on her brows, skin matched to her tone.
+  The whole picture gets a cartoon filter so everything blends.
+- **Girl mask**: the chibi girl head placed over the face instead.
+- **Show my room**: real background, face covered. If the face is lost, the whole picture blurs.
 - **Hide everything**: no camera picture at all, the girl in a pastel scene.
 - **Mic button**: voice presets (Normal, Chipmunk, Cartoon, Monster, Robot, Echo) and sliders for
   Pitch, Robot, Echo and Real voice mix. "Test voice" records 4 seconds and plays it back.
@@ -36,6 +40,8 @@ Needs Android 10 or newer. For MP4 recording, keep **Android System WebView** up
 
 | File | What it does |
 | --- | --- |
+| `app/src/main/assets/www/toonface.js` | Toon face painted onto the face mesh |
+| `app/src/main/assets/www/toon.js` | Cartoon (cel-shading) filter for the camera picture, WebGL |
 | `app/src/main/assets/www/girl.js` | Draws the chibi girl (colours are in `LOOK` at the top) |
 | `app/src/main/assets/www/app.js` | Camera, face tracking, blur safety, recording, saving |
 | `app/src/main/assets/www/voice.js` | Voice presets and the audio chain |

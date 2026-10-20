@@ -1,5 +1,7 @@
 import { drawGirl, makeHair, updateHair, neutralState } from "./girl.js";
 import { Voice, PRESETS } from "./voice.js";
+import { ToonFilter } from "./toon.js";
+import { drawToonFace, makeToonState } from "./toonface.js";
 
 const W = 720, H = 1280; // 9:16, Instagram Reels size (scaled 720p)
 const $ = (id) => document.getElementById(id);
@@ -37,6 +39,11 @@ requestAnimationFrame(heroLoop);
 const video = $("cam");
 const canvas = $("stage"), ctx = canvas.getContext("2d");
 let mode = store.get("cutiecam-mode", "room"); // "room" | "scene"
+let style = store.get("cutiecam-style", "toon"); // "toon" (cartoon face on her face) | "mask" (chibi girl)
+let pts = null; // smoothed face-mesh points in canvas pixels
+const toonState = makeToonState();
+const toon = new ToonFilter(540, 960);
+let skinRGB = [242, 196, 160], skinFrames = 0;
 let facing = "user";
 let videoStream = null, micStream = null;
 let landmarker = null, trackerFailed = false, gpuErrors = 0, usingGpu = true;
@@ -102,6 +109,7 @@ function readFace(res) {
   const bs = {};
   for (const c of (res.faceBlendshapes && res.faceBlendshapes[0] ? res.faceBlendshapes[0].categories : [])) bs[c.categoryName] = c.score;
   return {
+    pts: lm.map((p) => ({ x: ox + (1 - p.x) * dw, y: oy + p.y * dh })),
     x: cx, y: cy, R: Math.max(w * 0.74, h * 0.68), roll,
     yaw: clamp(((dx * ux + dy * uy) / w) * 1.6, -0.4, 0.4),
     pitch: clamp(((-dx * uy + dy * ux) / h) * 1.2, -0.3, 0.3),
@@ -114,7 +122,15 @@ function readFace(res) {
 }
 
 function smoothTo(t) {
-  if (!seenOnce) { Object.assign(st, t); seenOnce = true; return; }
+  if (!seenOnce || !pts || pts.length !== t.pts.length) {
+    pts = t.pts.map((p) => ({ ...p }));
+  } else {
+    for (let i = 0; i < pts.length; i++) {
+      pts[i].x += (t.pts[i].x - pts[i].x) * 0.62;
+      pts[i].y += (t.pts[i].y - pts[i].y) * 0.62;
+    }
+  }
+  if (!seenOnce) { const { pts: _, ...rest } = t; Object.assign(st, rest); seenOnce = true; return; }
   for (const k of ["x", "y", "R", "roll", "yaw", "pitch"]) st[k] += (t[k] - st[k]) * 0.6;
   for (const k of ["bL", "bR", "jaw", "smile", "brow", "pucker"]) st[k] += (t[k] - st[k]) * 0.7;
 }
@@ -313,8 +329,13 @@ function frame(now) {
     drawGirl(ctx, s, hair, { body: true });
   } else {
     const safe = tracking && seenOnce;
-    if (haveVideo) drawVideo(true, !safe); else { ctx.fillStyle = "#1d1626"; ctx.fillRect(0, 0, W, H); }
-    if (safe) drawGirl(ctx, st, hair, { body: false });
+    if (!haveVideo) { ctx.fillStyle = "#1d1626"; ctx.fillRect(0, 0, W, H); }
+    else if (safe && style === "toon" && toon.render(video, cover(), W, H, true)) ctx.drawImage(toon.canvas, 0, 0, W, H);
+    else drawVideo(true, !safe);
+    if (safe && style === "toon" && pts) {
+      if (++skinFrames % 20 === 1) sampleSkin();
+      drawToonFace(ctx, pts, skinLook(), st.smile, toonState);
+    } else if (safe) drawGirl(ctx, st, hair, { body: false });
     else if (haveVideo) centerText(trackerFailed ? "Face tracker didn't load" : "Picture blurred until your face is found");
   }
 
@@ -337,6 +358,49 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 
+/* Match the cartoon skin to her real skin tone (so face and neck blend) */
+function sampleSkin() {
+  try {
+    let r = 0, g = 0, b = 0, n = 0;
+    for (const i of [50, 280, 4]) {
+      const p = pts[i];
+      const d = ctx.getImageData(Math.round(p.x) - 3, Math.round(p.y) - 3, 6, 6).data;
+      for (let k = 0; k < d.length; k += 4) { r += d[k]; g += d[k + 1]; b += d[k + 2]; n++; }
+    }
+    if (!n) return;
+    const s = [r / n, g / n, b / n];
+    const a = skinFrames < 5 ? 1 : 0.3;
+    for (let k = 0; k < 3; k++) skinRGB[k] += (s[k] - skinRGB[k]) * a;
+  } catch (e) { /* reading pixels can fail on some phones; keep the last colour */ }
+}
+function skinLook() {
+  const mix = (c, t, k) => c.map((v, i) => Math.round(v + (t[i] - v) * k));
+  const css = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+  // a lighter, warmer version of her real tone; dim or odd lighting is pulled further toward a warm default
+  const luma = 0.299 * skinRGB[0] + 0.587 * skinRGB[1] + 0.114 * skinRGB[2];
+  const chroma = skinRGB[0] - skinRGB[2]; // skin is always redder than it is blue
+  const k = clamp(0.4 + Math.max(0, 150 - luma) / 220 + (chroma < 25 ? 0.25 : 0), 0.4, 0.85);
+  const base = mix(skinRGB, [250, 214, 186], k);
+  return {
+    skin: css(base),
+    skinLight: css(mix(base, [255, 245, 238], 0.35)),
+    skinShade: css(mix(base, [150, 80, 85], 0.3)),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Face style                                                          */
+/* ------------------------------------------------------------------ */
+function setStyle(s) {
+  style = s;
+  store.set("cutiecam-style", s);
+  $("styleToon").setAttribute("aria-pressed", s === "toon");
+  $("styleMask").setAttribute("aria-pressed", s === "mask");
+}
+$("styleToon").onclick = () => setStyle("toon");
+$("styleMask").onclick = () => setStyle("mask");
+setStyle(style);
+
 /* ------------------------------------------------------------------ */
 /* Background mode                                                     */
 /* ------------------------------------------------------------------ */
@@ -345,6 +409,7 @@ function setMode(m) {
   store.set("cutiecam-mode", m);
   $("modeRoom").setAttribute("aria-pressed", m === "room");
   $("modeScene").setAttribute("aria-pressed", m === "scene");
+  $("styleRow").hidden = m === "scene";
 }
 $("modeRoom").onclick = () => setMode("room");
 $("modeScene").onclick = () => setMode("scene");

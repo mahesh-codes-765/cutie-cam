@@ -44,7 +44,7 @@ button:disabled{opacity:.45}
   display:grid;place-items:center;border:1.5px solid var(--line)}
 .round svg{width:22px;height:22px}
 
-.bottom{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;flex-direction:column;gap:12px;padding:24px 16px 18px;
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;flex-direction:column;gap:10px;padding:24px 16px 18px;
   background:linear-gradient(transparent,rgba(20,14,28,.75) 45%)}
 .modes{display:flex;justify-content:center}
 .seg{display:flex;background:var(--glass);border-radius:999px;padding:3px;border:1.5px solid var(--line);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
@@ -121,6 +121,12 @@ input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--pop);height:30p
 </header>
 
 <footer class="bottom" id="controls">
+  <div class="modes" id="styleRow">
+    <div class="seg" role="group" aria-label="Face style">
+      <button id="styleToon" aria-pressed="true">Toon face</button>
+      <button id="styleMask" aria-pressed="false">Girl mask</button>
+    </div>
+  </div>
   <div class="modes">
     <div class="seg" role="group" aria-label="Background">
       <button id="modeRoom" aria-pressed="true">Show my room</button>

@@ -10,8 +10,18 @@ android {
         applicationId "com.cutiecam.app"
         minSdk 29          // Android 10 and newer
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
+    }
+
+    // One fixed key for every build, so new versions install over old ones.
+    signingConfigs {
+        debug {
+            storeFile file('cutiecam-debug.keystore')
+            storePassword 'cutiecam'
+            keyAlias 'cutiecam'
+            keyPassword 'cutiecam'
+        }
     }
 
     buildTypes {
