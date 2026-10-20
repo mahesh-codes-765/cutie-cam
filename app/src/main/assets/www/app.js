@@ -2,6 +2,8 @@ import { drawGirl, makeHair, updateHair, neutralState } from "./girl.js";
 import { Voice, PRESETS } from "./voice.js";
 import { ToonFilter } from "./toon.js";
 import { drawToonFace, makeToonState } from "./toonface.js";
+import { AICartoon, headPose } from "./aicartoon.js";
+import { loadHDLibs, hdSupported, planHD, convertHD } from "./hd.js";
 
 const W = 720, H = 1280; // 9:16, Instagram Reels size (scaled 720p)
 const $ = (id) => document.getElementById(id);
@@ -39,7 +41,18 @@ requestAnimationFrame(heroLoop);
 const video = $("cam");
 const canvas = $("stage"), ctx = canvas.getContext("2d");
 let mode = store.get("cutiecam-mode", "room"); // "room" | "scene"
-let style = store.get("cutiecam-style", "toon"); // "toon" (cartoon face on her face) | "mask" (chibi girl)
+// "ai" (AI redraws her face as a cartoon) | "toon" (cartoon face painted on her face) | "mask" (chibi girl)
+let style = store.get("cutiecam-style2", "ai");
+let hd = store.get("cutiecam-hd", true);   // AI style: convert in HD after recording
+const ai = new AICartoon();
+let aiStarted = false;
+let converting = false;
+// the frame source: the camera, or a recorded clip being re-processed
+let src = video, srcMirror = true, replaying = false;
+// mirrored, un-filtered camera frame (AI crops and HD recordings come from here)
+const rawCanvas = document.createElement("canvas");
+rawCanvas.width = W; rawCanvas.height = H;
+const rawCtx = rawCanvas.getContext("2d");
 let pts = null; // smoothed face-mesh points in canvas pixels
 const toonState = makeToonState();
 const toon = new ToonFilter(540, 960);
@@ -83,7 +96,7 @@ async function startTracker() {
 }
 
 function cover() {
-  const vw = video.videoWidth || 720, vh = video.videoHeight || 1280;
+  const vw = src.videoWidth || 720, vh = src.videoHeight || 1280;
   const sc = Math.max(W / vw, H / vh);
   const dw = vw * sc, dh = vh * sc;
   return { ox: (W - dw) / 2, oy: (H - dh) / 2, dw, dh };
@@ -93,7 +106,8 @@ function readFace(res) {
   const lm = res.faceLandmarks && res.faceLandmarks[0];
   if (!lm) return null;
   const { ox, oy, dw, dh } = cover();
-  const P = (i) => ({ x: ox + (1 - lm[i].x) * dw, y: oy + lm[i].y * dh }); // mirrored selfie view
+  const mx = (x) => (srcMirror ? 1 - x : x); // selfie view is mirrored
+  const P = (i) => ({ x: ox + mx(lm[i].x) * dw, y: oy + lm[i].y * dh });
   const L = P(234), Rr = P(454), T = P(10), B = P(152), N = P(1), E1 = P(33), E2 = P(263);
   const w = Math.hypot(L.x - Rr.x, L.y - Rr.y);
   const h = Math.hypot(T.x - B.x, T.y - B.y);
@@ -109,7 +123,7 @@ function readFace(res) {
   const bs = {};
   for (const c of (res.faceBlendshapes && res.faceBlendshapes[0] ? res.faceBlendshapes[0].categories : [])) bs[c.categoryName] = c.score;
   return {
-    pts: lm.map((p) => ({ x: ox + (1 - p.x) * dw, y: oy + p.y * dh })),
+    pts: lm.map((p) => ({ x: ox + mx(p.x) * dw, y: oy + p.y * dh })),
     x: cx, y: cy, R: Math.max(w * 0.74, h * 0.68), roll,
     yaw: clamp(((dx * ux + dy * uy) / w) * 1.6, -0.4, 0.4),
     pitch: clamp(((-dx * uy + dy * ux) / h) * 1.2, -0.3, 0.3),
@@ -174,7 +188,9 @@ $("startBtn").onclick = async () => {
   heroOn = false;
   $("welcome").hidden = true;
   btn.textContent = "Getting ready…";
+  cameraOn = true;
   startTracker();
+  ensureAI();
 };
 
 $("flipBtn").onclick = async () => {
@@ -194,21 +210,29 @@ function drawVideo(mirror, blurred) {
   if (!blurred) {
     ctx.save();
     if (mirror) { ctx.translate(W, 0); ctx.scale(-1, 1); }
-    ctx.drawImage(video, ox, oy, dw, dh);
+    ctx.drawImage(src, ox, oy, dw, dh);
     ctx.restore();
     return;
   }
   // heavy pixel-blur: shrink to 16 px wide, then stretch back up
   small.width = 16;
-  small.height = Math.max(1, Math.round((16 * (video.videoHeight || 1280)) / (video.videoWidth || 720)));
+  small.height = Math.max(1, Math.round((16 * (src.videoHeight || 1280)) / (src.videoWidth || 720)));
   sctx.save();
   if (mirror) { sctx.translate(small.width, 0); sctx.scale(-1, 1); }
-  sctx.drawImage(video, 0, 0, small.width, small.height);
+  sctx.drawImage(src, 0, 0, small.width, small.height);
   sctx.restore();
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(small, ox, oy, dw, dh);
   ctx.fillStyle = "rgba(29,22,38,.35)";
   ctx.fillRect(0, 0, W, H);
+}
+
+function drawRaw() {
+  const { ox, oy, dw, dh } = cover();
+  rawCtx.save();
+  if (srcMirror) { rawCtx.translate(W, 0); rawCtx.scale(-1, 1); }
+  rawCtx.drawImage(src, ox, oy, dw, dh);
+  rawCtx.restore();
 }
 
 const bokeh = Array.from({ length: 18 }, () => ({ x: Math.random(), y: Math.random(), r: 0.025 + Math.random() * 0.06, s: 0.2 + Math.random() * 0.6, p: Math.random() * 6 }));
@@ -285,19 +309,23 @@ function setStatus(cls, text) {
 }
 
 let lastT = performance.now(), emitAcc = 0;
+function nextTs() {
+  lastTs = Math.max(performance.now(), lastTs + 1);
+  return lastTs;
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = clamp((now - lastT) / 16.7, 0.2, 4);
   lastT = now;
-  const front = facing === "user";
-  const haveVideo = video.readyState >= 2;
+  if (converting) return; // the HD converter is using the GPU and the face tracker
+  const front = facing === "user" || replaying;
+  const haveVideo = src.readyState >= 2;
 
-  if (front && landmarker && haveVideo && video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    const ts = Math.max(now, lastTs + 1);
-    lastTs = ts;
+  if (front && landmarker && haveVideo && src.currentTime !== lastVideoTime) {
+    lastVideoTime = src.currentTime;
     try {
-      target = readFace(landmarker.detectForVideo(video, ts));
+      target = readFace(landmarker.detectForVideo(src, nextTs()));
       gpuErrors = 0;
     } catch (e) {
       target = null;
@@ -310,6 +338,7 @@ function frame(now) {
     if (target) { lastSeen = now; smoothTo(target); }
   }
   const tracking = front && now - lastSeen < 250;
+  if (front && haveVideo) drawRaw();
 
   if (!tracking) { // relax the face while searching
     st.jaw *= 0.85; st.pucker *= 0.85; st.brow *= 0.85;
@@ -319,7 +348,7 @@ function frame(now) {
 
   if (!front) {
     if (haveVideo) drawVideo(false, false); else { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); }
-  } else if (mode === "scene") {
+  } else if (mode === "scene" && !replaying) {
     drawScene(now);
     const R = 230;
     const s = { ...st, R,
@@ -328,11 +357,20 @@ function frame(now) {
     s.x = clamp(s.x, R, W - R);
     drawGirl(ctx, s, hair, { body: true });
   } else {
-    const safe = tracking && seenOnce;
+    const safe = tracking && seenOnce && !!pts;
     if (!haveVideo) { ctx.fillStyle = "#1d1626"; ctx.fillRect(0, 0, W, H); }
-    else if (safe && style === "toon" && toon.render(video, cover(), W, H, true)) ctx.drawImage(toon.canvas, 0, 0, W, H);
-    else drawVideo(true, !safe);
-    if (safe && style === "toon" && pts) {
+    else if (safe && style !== "mask" && toon.render(src, cover(), W, H, srcMirror)) ctx.drawImage(toon.canvas, 0, 0, W, H);
+    else drawVideo(srcMirror, !safe);
+
+    if (safe && style === "ai") {
+      const pose = headPose(pts);
+      if (ai.ready) ai.tick(rawCanvas, pose);
+      if (!(ai.ready && ai.fresh() && ai.drawLive(ctx, pose))) {
+        // AI still warming up (or a frame is late): the painted toon face keeps her hidden
+        if (++skinFrames % 20 === 1) sampleSkin();
+        drawToonFace(ctx, pts, skinLook(), st.smile, toonState);
+      }
+    } else if (safe && style === "toon") {
       if (++skinFrames % 20 === 1) sampleSkin();
       drawToonFace(ctx, pts, skinLook(), st.smile, toonState);
     } else if (safe) drawGirl(ctx, st, hair, { body: false });
@@ -349,12 +387,20 @@ function frame(now) {
   }
   drawParts(dt);
 
-  if (recording) setStatus("rec", "Recording");
+  if (replaying) setStatus("rec", "Converting");
+  else if (recording) setStatus("rec", "Recording");
   else if (!front) setStatus("lost", "Back camera · no filter");
   else if (trackerFailed) setStatus("lost", "Face tracker didn't load");
   else if (!landmarker) setStatus("", "Getting ready…");
-  else if (tracking) setStatus("ok", "Face hidden");
+  else if (tracking) setStatus("ok", faceStatus());
   else setStatus("lost", mode === "room" ? "Look at the camera · blurred" : "Look at the camera");
+}
+
+function faceStatus() {
+  if (style !== "ai" || mode !== "room") return "Face hidden";
+  if (ai.ready) return `Face hidden · AI ${Math.max(1, Math.round(1000 / Math.max(1, ai.avgMs)))} fps`;
+  if (ai.failed) return "Face hidden · AI unavailable";
+  return "Face hidden · AI loading";
 }
 requestAnimationFrame(frame);
 
@@ -391,14 +437,49 @@ function skinLook() {
 /* ------------------------------------------------------------------ */
 /* Face style                                                          */
 /* ------------------------------------------------------------------ */
+function loadScript(srcUrl) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[data-src="${srcUrl}"]`)) return res();
+    const el = document.createElement("script");
+    el.src = srcUrl; el.dataset.src = srcUrl;
+    el.onload = res;
+    el.onerror = () => rej(new Error("couldn't load " + srcUrl));
+    document.head.append(el);
+  });
+}
+let cameraOn = false;
+function ensureAI() {
+  if (aiStarted || !cameraOn || style !== "ai") return;
+  aiStarted = true;
+  loadScript("lib/tf.min.js")
+    .then(() => ai.init())
+    .then((ok) => { if (!ok) toast("AI cartoon couldn't start on this phone, so Toon face is used instead.", 4000); })
+    .catch((e) => { console.error(e); ai.failed = true; toast("AI cartoon couldn't start on this phone, so Toon face is used instead.", 4000); });
+}
+function syncTopTools() {
+  $("hdBtn").hidden = !(style === "ai" && mode === "room");
+  $("hdBtn").setAttribute("aria-pressed", hd);
+  $("hdBtn").textContent = hd ? "HD on" : "HD off";
+}
 function setStyle(s) {
   style = s;
-  store.set("cutiecam-style", s);
+  store.set("cutiecam-style2", s);
+  $("styleAI").setAttribute("aria-pressed", s === "ai");
   $("styleToon").setAttribute("aria-pressed", s === "toon");
   $("styleMask").setAttribute("aria-pressed", s === "mask");
+  syncTopTools();
+  ensureAI();
 }
+$("styleAI").onclick = () => setStyle("ai");
 $("styleToon").onclick = () => setStyle("toon");
 $("styleMask").onclick = () => setStyle("mask");
+$("hdBtn").onclick = () => {
+  hd = !hd;
+  store.set("cutiecam-hd", hd);
+  syncTopTools();
+  toast(hd ? "HD on: after recording, the video is redrawn in high quality (takes a few minutes)."
+           : "HD off: the video is saved right away with the live cartoon.", 3500);
+};
 setStyle(style);
 
 /* ------------------------------------------------------------------ */
@@ -410,6 +491,7 @@ function setMode(m) {
   $("modeRoom").setAttribute("aria-pressed", m === "room");
   $("modeScene").setAttribute("aria-pressed", m === "scene");
   $("styleRow").hidden = m === "scene";
+  syncTopTools();
 }
 $("modeRoom").onclick = () => setMode("room");
 $("modeScene").onclick = () => setMode("scene");
@@ -572,16 +654,29 @@ function pickMime() {
   ];
   return list.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || "";
 }
+function fmtTime(sec) {
+  if (sec == null || !isFinite(sec)) return "";
+  if (sec < 60) return `${Math.max(1, Math.round(sec))} sec`;
+  return `${Math.round(sec / 60)} min`;
+}
+
 recBtn.onclick = () => {
+  if (converting || replaying) return;
   if (recording) { recorder && recorder.stop(); return; }
   if (!canvas.captureStream || !window.MediaRecorder) return toast("Recording isn't supported on this phone's WebView.");
   voice.resume();
-  const tracks = [...canvas.captureStream(30).getVideoTracks()];
+  recMime = pickMime();
+  const wantHD = style === "ai" && hd && mode === "room" && facing === "user";
+  const useHD = wantHD && ai.ready && !!landmarker && hdSupported() && recMime.startsWith("video/mp4");
+  if (wantHD && !useHD) {
+    toast(!ai.ready ? "AI is still loading, so this clip uses the live cartoon." : "HD isn't supported on this phone, so this clip uses the live cartoon.", 3500);
+  }
+  // HD: record the plain camera (kept only in memory) and redraw it after; otherwise record what's on screen
+  const tracks = [...(useHD ? rawCanvas : canvas).captureStream(30).getVideoTracks()];
   const a = voice.track || (micStream && micStream.getAudioTracks()[0]);
   if (a) tracks.push(a);
-  recMime = pickMime();
   try {
-    recorder = new MediaRecorder(new MediaStream(tracks), recMime ? { mimeType: recMime, videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 128_000 } : undefined);
+    recorder = new MediaRecorder(new MediaStream(tracks), recMime ? { mimeType: recMime, videoBitsPerSecond: useHD ? 8_000_000 : 6_000_000, audioBitsPerSecond: 128_000 } : undefined);
   } catch (e) {
     recorder = new MediaRecorder(new MediaStream(tracks));
   }
@@ -593,9 +688,13 @@ recBtn.onclick = () => {
     recBtn.setAttribute("aria-label", "Start recording");
     clearInterval(timerInt);
     timerEl && timerEl.remove();
+    const seconds = (performance.now() - recStart) / 1000;
     const mime = (recorder.mimeType || recMime || "video/webm").split(";")[0];
+    const blob = new Blob(chunks, { type: mime });
+    chunks = [];
+    if (useHD) { startHD(blob, seconds); return; }
     const isMp4 = mime.includes("mp4");
-    showPreview(new Blob(chunks, { type: mime }), `CutieCam_${stamp()}.${isMp4 ? "mp4" : "webm"}`, mime,
+    showPreview(blob, `CutieCam_${stamp()}.${isMp4 ? "mp4" : "webm"}`, mime,
       isMp4 ? "" : "This phone saved a WebM video, which Instagram may not accept. Update “Android System WebView” in the Play Store to get MP4.");
   };
   recorder.start(1000);
@@ -608,13 +707,128 @@ recBtn.onclick = () => {
   timerEl.textContent = "0:00";
   recBtn.append(timerEl);
   timerInt = setInterval(() => {
-    const s = Math.floor((performance.now() - recStart) / 1000);
-    timerEl.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    const sec = Math.floor((performance.now() - recStart) / 1000);
+    timerEl.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}${useHD ? " · HD" : ""}`;
   }, 250);
 };
 
+/* ------------------------------------------------------------------ */
+/* HD conversion after recording                                       */
+/* ------------------------------------------------------------------ */
+let convertAbort = null;
+function convUI(frac, text) {
+  $("convBar").style.width = `${Math.round(frac * 100)}%`;
+  $("convText").textContent = text;
+}
+async function startHD(raw, seconds) {
+  converting = true;
+  $("convert").hidden = false;
+  $("convTitle").textContent = "Making your HD cartoon video";
+  convUI(0, "Getting ready…");
+  convertAbort = new AbortController();
+  const signal = convertAbort.signal;
+  try {
+    await loadHDLibs();
+    const plan = window.__cutiePlan || planHD(ai, Math.max(1, Math.round(seconds * 30))); // __cutiePlan: test hook
+    convUI(0, `About ${fmtTime(plan.estSec)} for this ${fmtTime(seconds)} clip`);
+    const t0 = performance.now();
+    const out = await convertHD(raw, { W, H, landmarker, nextTs, ai, toon, skin: skinLook }, {
+      res: plan.res, every: plan.every, signal,
+      onProgress: (f, eta) => convUI(f, `${Math.round(f * 100)}%${eta != null ? ` · about ${fmtTime(eta)} left` : ""}`),
+    });
+    raw = null; // drop the plain clip
+    console.log(`HD done in ${((performance.now() - t0) / 1000).toFixed(1)} s at ${plan.res}px, AI every ${plan.every} frame(s)`);
+    $("convert").hidden = true;
+    converting = false;
+    showPreview(out, `CutieCam_${stamp()}.mp4`, "video/mp4");
+  } catch (e) {
+    converting = false;
+    if (e && e.name === "AbortError") {
+      raw = null;
+      $("convert").hidden = true;
+      toast("Cancelled. The clip was deleted.");
+    } else {
+      console.error("HD conversion failed", e);
+      // fall back to redrawing the clip with the live cartoon, in real time
+      try {
+        $("convTitle").textContent = "Finishing your cartoon video";
+        convUI(0, "HD didn't work on this phone, using the live cartoon instead…");
+        const out = await replayConvert(raw, (f) => convUI(f, `${Math.round(f * 100)}%`));
+        raw = null;
+        $("convert").hidden = true;
+        showPreview(out.blob, `CutieCam_${stamp()}.${out.mime.includes("mp4") ? "mp4" : "webm"}`, out.mime);
+      } catch (e2) {
+        console.error(e2);
+        raw = null;
+        $("convert").hidden = true;
+        toast("Sorry, this clip couldn't be converted. Try again with HD off.", 4500);
+      }
+    }
+  } finally {
+    convertAbort = null;
+    lastVideoTime = -1;
+  }
+}
+$("convCancel").onclick = () => {
+  if (convertAbort) convertAbort.abort();
+  if (replayVideo) replayVideo.dispatchEvent(new Event("cutie-cancel"));
+};
+
+// Plays the plain clip through the live pipeline and records the result (takes as long as the clip).
+let replayVideo = null;
+function replayConvert(raw, onProgress) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    replayVideo = v;
+    v.playsInline = true;
+    v.preload = "auto";
+    const url = URL.createObjectURL(raw);
+    v.src = url;
+    let rec = null, parts = [], audioCtx = null, finished = false;
+    const done = (err, val) => {
+      if (finished) return;
+      finished = true;
+      replaying = false; src = video; srcMirror = true; seenOnce = false; lastVideoTime = -1; replayVideo = null;
+      try { v.pause(); } catch (_) {}
+      URL.revokeObjectURL(url);
+      if (audioCtx && audioCtx !== voice.ctx) audioCtx.close().catch(() => {});
+      err ? reject(err) : resolve(val);
+    };
+    v.addEventListener("cutie-cancel", () => {
+      done(new DOMException("Cancelled", "AbortError")); // marks finished first, so onstop below is ignored
+      if (rec && rec.state !== "inactive") rec.stop();
+    });
+    v.onerror = () => done(new Error("Couldn't play the clip"));
+    v.onloadedmetadata = async () => {
+      try {
+        const tracks = [...canvas.captureStream(30).getVideoTracks()];
+        audioCtx = voice.ctx || new AudioContext();
+        const node = audioCtx.createMediaElementSource(v);
+        const dest = audioCtx.createMediaStreamDestination();
+        node.connect(dest);
+        const at = dest.stream.getAudioTracks()[0];
+        if (at) tracks.push(at);
+        const mime = pickMime();
+        rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 6_000_000 } : undefined);
+        rec.ondataavailable = (e) => e.data && e.data.size && parts.push(e.data);
+        rec.onstop = () => {
+          if (finished) return;
+          const m = (rec.mimeType || mime || "video/webm").split(";")[0];
+          done(null, { blob: new Blob(parts, { type: m }), mime: m });
+        };
+        src = v; srcMirror = false; replaying = true; seenOnce = false; lastVideoTime = -1;
+        v.ontimeupdate = () => onProgress && v.duration && isFinite(v.duration) && onProgress(Math.min(0.99, v.currentTime / v.duration));
+        v.onended = () => rec.state !== "inactive" && rec.stop();
+        rec.start(1000);
+        await v.play();
+      } catch (e) { done(e); }
+    };
+  });
+}
+
 /* Android back button: close panels first */
 window.cutieBack = () => {
+  if (converting || replaying) return true; // ignore back while converting (use Cancel)
   if (!$("preview").hidden) { closePreview(); return true; }
   if (!$("sheet").hidden) { $("sheet").hidden = true; return true; }
   if (recording) { recorder.stop(); return true; }

@@ -124,7 +124,7 @@ export class ToonFilter {
       gl.uniform1i(this.u.uTex, 0);
       gl.uniform2f(this.u.uOut, this.canvas.width, this.canvas.height);
       gl.uniform4f(this.u.uRect, rect.ox * sx, rect.oy * sy, rect.dw * sx, rect.dh * sy);
-      gl.uniform2f(this.u.uTexel, 1 / (video.videoWidth || 720), 1 / (video.videoHeight || 1280));
+      gl.uniform2f(this.u.uTexel, 1 / (video.videoWidth || video.width || 720), 1 / (video.videoHeight || video.height || 1280));
       gl.uniform1f(this.u.uMirror, mirror ? 1 : 0);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       return true;
