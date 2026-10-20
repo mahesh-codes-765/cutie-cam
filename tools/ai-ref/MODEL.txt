@@ -1,0 +1,160 @@
+Generator(
+  (block_a): Sequential(
+    (0): ConvNormLReLU(
+      (0): ReflectionPad2d((3, 3, 3, 3))
+      (1): Conv2d(3, 32, kernel_size=(7, 7), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 32, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (1): ConvNormLReLU(
+      (0): ReflectionPad2d((0, 1, 0, 1))
+      (1): Conv2d(32, 64, kernel_size=(3, 3), stride=(2, 2), bias=False)
+      (2): GroupNorm(1, 64, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (2): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 64, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+  )
+  (block_b): Sequential(
+    (0): ConvNormLReLU(
+      (0): ReflectionPad2d((0, 1, 0, 1))
+      (1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (1): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+  )
+  (block_c): Sequential(
+    (0): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (1): InvertedResBlock(
+      (layers): Sequential(
+        (0): ConvNormLReLU(
+          (0): ReflectionPad2d((0, 0, 0, 0))
+          (1): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (1): ConvNormLReLU(
+          (0): ReflectionPad2d((1, 1, 1, 1))
+          (1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), groups=256)
+          (2): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (2): Conv2d(256, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (3): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+      )
+    )
+    (2): InvertedResBlock(
+      (layers): Sequential(
+        (0): ConvNormLReLU(
+          (0): ReflectionPad2d((0, 0, 0, 0))
+          (1): Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (1): ConvNormLReLU(
+          (0): ReflectionPad2d((1, 1, 1, 1))
+          (1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), groups=512)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (2): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (3): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+      )
+    )
+    (3): InvertedResBlock(
+      (layers): Sequential(
+        (0): ConvNormLReLU(
+          (0): ReflectionPad2d((0, 0, 0, 0))
+          (1): Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (1): ConvNormLReLU(
+          (0): ReflectionPad2d((1, 1, 1, 1))
+          (1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), groups=512)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (2): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (3): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+      )
+    )
+    (4): InvertedResBlock(
+      (layers): Sequential(
+        (0): ConvNormLReLU(
+          (0): ReflectionPad2d((0, 0, 0, 0))
+          (1): Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (1): ConvNormLReLU(
+          (0): ReflectionPad2d((1, 1, 1, 1))
+          (1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), groups=512)
+          (2): GroupNorm(1, 512, eps=1e-05, affine=True, bias=True)
+          (3): LeakyReLU(negative_slope=0.2, inplace=True)
+        )
+        (2): Conv2d(512, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+        (3): GroupNorm(1, 256, eps=1e-05, affine=True, bias=True)
+      )
+    )
+    (5): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(256, 128, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+  )
+  (block_d): Sequential(
+    (0): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (1): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 128, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+  )
+  (block_e): Sequential(
+    (0): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 64, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (1): ConvNormLReLU(
+      (0): ReflectionPad2d((1, 1, 1, 1))
+      (1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 64, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+    (2): ConvNormLReLU(
+      (0): ReflectionPad2d((3, 3, 3, 3))
+      (1): Conv2d(64, 32, kernel_size=(7, 7), stride=(1, 1), bias=False)
+      (2): GroupNorm(1, 32, eps=1e-05, affine=True, bias=True)
+      (3): LeakyReLU(negative_slope=0.2, inplace=True)
+    )
+  )
+  (out_layer): Sequential(
+    (0): Conv2d(32, 3, kernel_size=(1, 1), stride=(1, 1), bias=False)
+    (1): Tanh()
+  )
+)
